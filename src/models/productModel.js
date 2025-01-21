@@ -15,3 +15,12 @@ exports.getProducts = async () => {
     const [rows] = await db.query(`SELECT * FROM products`);
     return rows;
 };
+
+// Meng-update data product dari table products
+exports.updateProduct = async (id, product) => {
+    const [rows] = await db.query(
+        `UPDATE products SET name = ?, price = ?, stock = ?, description = ? WHERE id = ?`,
+        [product.name, product.price, product.stock, product.description, id]
+    );
+    return rows;
+};
