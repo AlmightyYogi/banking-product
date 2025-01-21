@@ -87,10 +87,7 @@ exports.updateProduct = async (req, res) => {
         }
 
         // Melakukan update product
-        const result = await db.query(
-            `UPDATE products SET name = ?, price = ?, stock = ?, description = ? WHERE id = ?`,
-            [name, price, stock, description, id]
-        );
+        const result = await ProductModel.updateProduct(id, { name, price, stock, description });
 
         // Pengecekan data jika product tidak ada
         if (result[0].affectedRows === 0) {
