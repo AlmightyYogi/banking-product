@@ -3,8 +3,22 @@ const BundleModel = require('../models/bundleModel');
 
 exports.getBundles = async (req, res) => {
     try {
+        // Tarik data bundle (pake await agar dapat menjadi array bukan Promise)
         const bundles = await BundleModel.getBundles();
-        res.status(200).json(bundles);
+
+        // Tambah detail produk
+        const bundleWithProductDetails = await Promise.all(
+            bundles.map(async (bundle) => {
+                // Query mendapatkan data produk berdasarkan product_id
+                const [productData] = await db.query(`SELECT * FROM products WHERE id = ?`, [bundle.product_id]);
+                return {
+                    ...bundle,
+                    data: productData.length > 0 ? productData[0] : null, // Tampilkan data produk jika ada
+                };
+            })
+        );
+
+        res.status(200).json(bundleWithProductDetails);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -43,12 +57,15 @@ exports.createBundle = async (req, res) => {
         }
 
         // Mengecek jika ada bundle dengan name yang sama, tetap berelasi dengan produk berbeda
-        const [existingBundle] = await db.query(`SELECT * FROM bundles WHERE name = ? AND product_id != ?`, [name, product_id]);
-        if (existingBundle.length > 0) {
+        const [duplicateBundle] = await db.query(
+            `SELECT * FROM bundles WHERE name = ? AND product_id = ?`,
+            [name, product_id]
+        );
+        if (duplicateBundle.length > 0) {
             return res.status(400).json({
                 message: 'Failed to create bundle',
                 status: 400,
-                error: `A bundle with the same name already exists for a different product`
+                error: `A bundle with the name "${name}" already exists for the same product`,
             });
         }
 
@@ -67,7 +84,8 @@ exports.createBundle = async (req, res) => {
                 product_id,
                 price,
                 stock,
-                description
+                description,
+                product_details: product[0],
             }
         });
     } catch (error) {
@@ -89,11 +107,40 @@ exports.updateBundle = async (req, res) => {
             });
         }
 
-        // Update bundle
-        const result = await db.query(
-            `UPDATE bundles SET name = ?, product_id = ?, price = ?, stock = ?, description = ? WHERE id = ?`,
-            [name, product_id, price, stock, description, id]
+        // Mengecek stok produk
+        const [product] = await db.query(`SELECT * FROM products WHERE id = ?`, [product_id]);
+        if (!product.length) {
+            return res.status(404).json({
+                message: 'Failed to update bundle',
+                status: 404,
+                error: 'Product not found',
+            });
+        }
+
+        // Validasi jika stok melebihi stok produk
+        if (stock > product[0].stock) {
+            return res.status(400).json({
+                message: 'Failed to update bundle',
+                status: 400,
+                error: 'Stock exceeds available product stock',
+            });
+        }
+
+        // Validasi bundle kalo ada yang sama untuk produk yang sama
+        const [duplicateBundle] = await db.query(
+            `SELECT * FROM bundles WHERE name = ? AND product_id = ? AND id != ?`,
+            [name, product_id, id]
         );
+        if (duplicateBundle.length > 0) {
+            return res.status(400).json({
+                message: 'Failed to update bundle',
+                status: 400,
+                error: `A bundle with the name "${name}" already exists for the same product`,
+            });
+        }
+
+        // Update bundle
+        const result = await BundleModel.updateBundle(id, { name, product_id, price, stock, description });
 
         // Jika id tidak ditemukan, return error not found
         if (result[0].affectedRows === 0) {
@@ -116,7 +163,8 @@ exports.updateBundle = async (req, res) => {
                 product_id,
                 price,
                 stock,
-                description
+                description,
+                product_details: product[0],
             }
         });
     } catch (error) {
