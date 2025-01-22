@@ -4,52 +4,38 @@ const router = express.Router();
 
 router.post('/', async (req, res) => {
     const connection = await db.getConnection();
+    const rollbackQueries = [];
+
     try {
         const { products, bundles } = req.body;
+
+        // Validasi field kosong
+        if (!products && !bundles) {
+            return res.status(400).json({
+                message: 'Failed to process purchase',
+                status: 400,
+                error: 'All fields are required',
+            });
+        }
 
         // Validasi kalo products dan bundles bukan array
         if (!Array.isArray(products) || !Array.isArray(bundles)) {
             return res.status(400).json({
                 message: 'Failed to process purchase',
                 status: 400,
-                error: '`products` and `bundles` must be arrays',
+                error: 'products and bundles must be arrays',
             });
         }
 
         let totalCost = 0;
 
-        // Menyimpan stok awal untuk rollback kalo ada eror
-        const rollbackQueries = [];
-
         // Transaksi DB
         await connection.beginTransaction();
 
-        // Jika tidak ada produk atau tidak ada bundle atau tidak ada keduanya jika beli sekali dua, saat beli namun value kosong 
-        if (products.length === 0 && bundles.length === 0) {
-            return res.status(400).json({
-                message: 'Failed to process purchase',
-                status: 400,
-                error: 'No products or bundles selected for purchase',
-            });
-        } else if (products.length === 0) {
-            return res.status(400).json({
-                message: 'Failed to process purchase',
-                status: 400,
-                error: 'No products selected for purchase'
-            });
-        } else if (bundles.length === 0) {
-            return res.status(400).json({
-                message: 'Failed to process purchase',
-                status: 400,
-                error: 'No bundles selected for purchase',
-            });
-        }
-        
-
-        // Lakukan looping untuk melakukan pembelian product dan bundles karena array
-        if (products.length > 0) { // Tujuan untuk mengecek apakah products dibeli atau tidak
+        // Lakukan proses pembelian produk
+        if (products.length > 0) {
             for (const product of products) {
-                const [result] = await db.query(`SELECT id, price, stock FROM products WHERE id = ?`, [product.id]);
+                const [result] = await db.query('SELECT id, price, stock FROM products WHERE id = ?', [product.id]);
                 if (!result.length) {
                     return res.status(404).json({
                         message: 'Failed to process purchase',
@@ -65,24 +51,31 @@ router.post('/', async (req, res) => {
                     });
                 }
                 totalCost += result[0].price * product.quantity;
-
-                // Menyimpan query rollback produk
                 rollbackQueries.push({
-                    query: `UPDATE products SET stock = stock + ? WHERE id = ?`,
+                    query: 'UPDATE products SET stock = stock + ? WHERE id = ?',
                     params: [product.quantity, product.id],
                 });
+
+                // Memperbarui stok produk
+                await db.query('UPDATE products SET stock = stock - ? WHERE id = ?', [product.quantity, product.id]);
+
+                // Update stok bundle yang terkait dengan produk ini
+                const [bundlesForProduct] = await db.query('SELECT id FROM bundles WHERE product_id = ?', [product.id]);
+                for (const bundle of bundlesForProduct) {
+                    await db.query('UPDATE bundles SET stock = stock - ? WHERE id = ?', [product.quantity, bundle.id]);
+                }
             }
         }
-        
-        if (bundles.length > 0) { // Tujuan untuk mengecek apakah bundles dibeli atau tidak
+
+        // Lakukan proses pembelian bundle
+        if (bundles.length > 0) {
             for (const bundle of bundles) {
-                const [result] = await db.query(`SELECT id, price, stock FROM bundles WHERE id = ?`, [bundle.id]);
+                const [result] = await db.query('SELECT id, price, stock, product_id FROM bundles WHERE id = ?', [bundle.id]);
                 if (!result.length) {
-                    // Rollback product
+                    // Rollback jika bundle tidak ditemukan
                     for (const rollback of rollbackQueries) {
                         await db.query(rollback.query, rollback.params);
                     }
-
                     return res.status(404).json({
                         message: 'Failed to process purchase',
                         status: 404,
@@ -90,11 +83,10 @@ router.post('/', async (req, res) => {
                     });
                 }
                 if (result[0].stock < bundle.quantity) {
-                    // Rollback product
+                    // Rollback jika stok bundle tidak cukup
                     for (const rollback of rollbackQueries) {
                         await db.query(rollback.query, rollback.params);
                     }
-
                     return res.status(400).json({
                         message: 'Failed to process purchase',
                         status: 400,
@@ -103,41 +95,35 @@ router.post('/', async (req, res) => {
                 }
                 totalCost += result[0].price * bundle.quantity;
 
-                // Menyimpan query rollback bundle
+                // Menambahkan rollback untuk bundle dan produk terkait
                 rollbackQueries.push({
-                    query: `UPDATE bundles SET stock = stock = ? WHERE id = ?`,
+                    query: 'UPDATE bundles SET stock = stock + ? WHERE id = ?',
                     params: [bundle.quantity, bundle.id],
                 });
+
+                rollbackQueries.push({
+                    query: 'UPDATE products SET stock = stock + ? WHERE id = ?',
+                    params: [bundle.quantity, result[0].product_id],  // Menggunakan product_id dari bundle
+                });
+
+                // Update stok bundle dan produk terkait
+                await db.query('UPDATE bundles SET stock = stock - ? WHERE id = ?', [bundle.quantity, bundle.id]);
+                await db.query('UPDATE products SET stock = stock - ? WHERE id = ?', [bundle.quantity, result[0].product_id]);
             }
         }
 
-        // Update kalo validasi telah berhasil
-        if (products.length > 0) {
-            for (const product of products) {
-                await connection.query(`UPDATE products SET stock = stock - ? WHERE id = ?`, [product.quantity, product.id]);
-            }
-        }
-
-        if (bundles.length > 0) {
-            for (const bundle of bundles) {
-                await connection.query(`UPDATE bundles SET stock = stock - ? WHERE id = ?`, [bundle.quantity, bundle.id]);
-            }
-        }
-
-        // Kalo validasi sukses, maka query akan di tetapkan (commit) supaya query berjalan
+        // Commit transaksi jika semuanya sukses
         await connection.commit();
 
         res.status(200).json({
-            message: 'Purchase successfull',
+            message: 'Purchase successful',
             status: 200,
             totalCost,
         });
     } catch (error) {
-        // Rollback semua stok jika eror
-        if (rollbackQueries.length > 0) {
-            for (const rollback of rollbackQueries) {
-                await db.query(rollback.query, rollback.params);
-            }
+        // Rollback semua stok jika ada error
+        for (const rollback of rollbackQueries) {
+            await db.query(rollback.query, rollback.params);
         }
 
         res.status(500).json({
@@ -147,7 +133,7 @@ router.post('/', async (req, res) => {
         });
     } finally {
         // Tutup koneksi DB
-        connection.release(); // Cara untuk memastikan bahwa koneksi yang sudah selesai dipakai bisa digunakan kembali oleh aplikasi lain.
+        connection.release();
     }
 });
 
