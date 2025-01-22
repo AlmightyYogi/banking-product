@@ -62,6 +62,26 @@ exports.createProduct = async (req, res) => {
     }
 };
 
+exports.getProductById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const product = await ProductModel.getProductById(id);
+
+        // Jika product tidak ditemukan
+        if (!product || (Array.isArray(product) && product.length === 0)) {
+            return res.status(404).json({
+                message: 'Product not found',
+                status: 404,
+                error: 'Product not found',
+            });
+        }
+
+        res.status(200).json(product);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
 exports.updateProduct = async (req, res) => {
     try {
         const { id } = req.params;
@@ -90,7 +110,7 @@ exports.updateProduct = async (req, res) => {
         const result = await ProductModel.updateProduct(id, { name, price, stock, description });
 
         // Pengecekan data jika product tidak ada
-        if (result[0].affectedRows === 0) {
+        if (result && result.affectedRows === 0) {
             return res.status(404).json({
                 message: 'Failed to update product',
                 status: 404,
