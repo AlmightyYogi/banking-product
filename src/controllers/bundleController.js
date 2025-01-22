@@ -93,6 +93,26 @@ exports.createBundle = async (req, res) => {
     }
 };
 
+exports.getBundleById = async (req, res) => {
+    try {
+        const {id} = req.params;
+        const bundle = await BundleModel.getBundleById(id);
+
+        // Jika bundle tidak ditemukan
+        if (!bundle || (Array.isArray(bundle) && bundle.length === 0)) {
+            return res.status(404).json({
+                message: 'Bundle not found',
+                status: 404,
+                error: 'Bundle not found',
+            });
+        }
+
+        res.status(200).json(bundle);
+    } catch (error) {
+        res.status(500).json({ error:error.message });
+    }
+};
+
 exports.updateBundle = async (req, res) => {
     try {
         const { id } = req.params;
@@ -143,7 +163,7 @@ exports.updateBundle = async (req, res) => {
         const result = await BundleModel.updateBundle(id, { name, product_id, price, stock, description });
 
         // Jika id tidak ditemukan, return error not found
-        if (result[0].affectedRows === 0) {
+        if (result && result.affectedRows === 0) {
             return res.status(404).json({
                 message: 'Failed to update bundle',
                 status: 404,
