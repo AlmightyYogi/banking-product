@@ -28,37 +28,37 @@ exports.createBundle = async (req, res) => {
     try {
         const { name, product_id, price, stock, description } = req.body;
 
-        // Validasi request tidak boleh kosong
+        // Validasi input wajib diisi
         if (!name || !product_id || !price || !stock || !description) {
             return res.status(400).json({
                 message: 'Failed to create bundle',
                 status: 400,
-                error: 'All fields are required'
+                error: 'All fields are required',
             });
         }
 
-        // Mengecek stok produk
-        const [product] = await db.query(`SELECT stock FROM products WHERE id = ?`, [product_id]);
+        // Cek apakah produk terkait ada
+        const [product] = await db.query('SELECT * FROM products WHERE id = ?', [product_id]);
         if (!product.length) {
             return res.status(404).json({
                 message: 'Failed to create bundle',
                 status: 404,
-                error: 'Product not found'
+                error: 'Product not found',
             });
         }
 
-        // Validasi jika product yang dipilih melebihi stok
+        // Validasi stok produk
         if (stock > product[0].stock) {
             return res.status(400).json({
                 message: 'Failed to create bundle',
                 status: 400,
-                error: 'Stock exceeds available product stock'
+                error: 'Stock exceeds available product stock',
             });
         }
 
-        // Mengecek jika ada bundle dengan name yang sama, tetap berelasi dengan produk berbeda
+        // Validasi jika ada nama bundle yang sama untuk produk terkait
         const [duplicateBundle] = await db.query(
-            `SELECT * FROM bundles WHERE name = ? AND product_id = ?`,
+            'SELECT * FROM bundles WHERE name = ? AND product_id = ?',
             [name, product_id]
         );
         if (duplicateBundle.length > 0) {
@@ -69,14 +69,12 @@ exports.createBundle = async (req, res) => {
             });
         }
 
-        // Update stok produk
-        await db.query(`UPDATE products SET stock = ? WHERE id = ?`, [stock, product_id]);
-
+        // Buat bundle baru
         const result = await BundleModel.createBundle({ name, product_id, price, stock, description });
-        
-        // Mengembalikan response sesuai request
+
+        // Respon sukses
         res.status(201).json({
-            message: 'Bundle created',
+            message: 'Bundle created successfully',
             status: 201,
             data: {
                 id: result.insertId,
@@ -85,8 +83,7 @@ exports.createBundle = async (req, res) => {
                 price,
                 stock,
                 description,
-                product_details: product[0],
-            }
+            },
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -170,9 +167,6 @@ exports.updateBundle = async (req, res) => {
                 error: 'Bundle not found'
             });
         }
-
-        // Update stok produk terkait
-        await db.query(`UPDATE products SET stock = ? WHERE id = ?`, [stock, product_id]);
 
         res.status(200).json({
             message: 'Bundle updated successfully',
