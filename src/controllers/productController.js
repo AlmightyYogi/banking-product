@@ -96,9 +96,11 @@ exports.updateProduct = async (req, res) => {
             });
         }
 
-        // Mengecek apakah ada data yang di update dengan name product yang sama
-        const existingProducts = await ProductModel.getProducts();
-        if (existingProducts.some((p) => p.name === name && p.id !== parseInt(id))) {
+        // Validasi jika ada product lain denga nama yang sama
+        const checkProductQuery = `SELECT * FROM products WHERE name = ? AND id != ? LIMIT 1`;
+        const [existingProduct] = await db.query(checkProductQuery, [name, parseInt[id]]);
+
+        if (existingProduct.length > 0) {
             return res.status(400).json({
                 message: 'Failed to update product',
                 status: 400,
@@ -107,7 +109,8 @@ exports.updateProduct = async (req, res) => {
         }
 
         // Melakukan update product
-        const result = await ProductModel.updateProduct(id, { name, price, stock, description });
+        const updateQuery = `UPDATE products SET name = ?, price = ?, stock = ?, description = ? WHERE id = ?`;
+        const [result] = await db.query(updateQuery, [name, price, stock, description, id]);
 
         // Pengecekan data jika product tidak ada
         if (result && result.affectedRows === 0) {
