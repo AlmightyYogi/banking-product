@@ -110,6 +110,7 @@ exports.getBundleById = async (req, res) => {
     }
 };
 
+// Menggunakan Transaction
 exports.updateBundle = async (req, res) => {
     try {
         const { id } = req.params;
@@ -124,9 +125,13 @@ exports.updateBundle = async (req, res) => {
             });
         }
 
+        // Mulai transaction
+        await db.query('START TRANSACTION');
+
         // Mengecek stok produk
         const [product] = await db.query(`SELECT * FROM products WHERE id = ?`, [product_id]);
         if (!product.length) {
+            await db.query('ROLLBACK');
             return res.status(404).json({
                 message: 'Failed to update bundle',
                 status: 404,
@@ -136,6 +141,7 @@ exports.updateBundle = async (req, res) => {
 
         // Validasi jika stok melebihi stok produk
         if (stock > product[0].stock) {
+            await db.query('ROLLBACK');
             return res.status(400).json({
                 message: 'Failed to update bundle',
                 status: 400,
@@ -149,6 +155,7 @@ exports.updateBundle = async (req, res) => {
             [name, product_id, id]
         );
         if (duplicateBundle.length > 0) {
+            await db.query('ROLLBACK');
             return res.status(400).json({
                 message: 'Failed to update bundle',
                 status: 400,
@@ -161,12 +168,16 @@ exports.updateBundle = async (req, res) => {
 
         // Jika id tidak ditemukan, return error not found
         if (result && result.affectedRows === 0) {
+            await db.query('ROLLBACK');
             return res.status(404).json({
                 message: 'Failed to update bundle',
                 status: 404,
                 error: 'Bundle not found'
             });
         }
+
+        // Commit transaction jika semua sukses
+        await db.query('COMMIT');
 
         res.status(200).json({
             message: 'Bundle updated successfully',
@@ -182,6 +193,11 @@ exports.updateBundle = async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        await db.query('ROLLBACK');
+        res.status(500).json({
+            message: 'Failed to update bundle',
+            status: 500,
+            error: error.message,
+        });
     }
 };
