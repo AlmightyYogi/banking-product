@@ -60,9 +60,17 @@ router.post('/', async (req, res) => {
                 await db.query('UPDATE products SET stock = stock - ? WHERE id = ?', [product.quantity, product.id]);
 
                 // Update stok bundle yang terkait dengan produk ini
-                const [bundlesForProduct] = await db.query('SELECT id FROM bundles WHERE product_id = ?', [product.id]);
+                const [bundlesForProduct] = await db.query('SELECT id, stock FROM bundles WHERE product_id = ?', [product.id]);
                 for (const bundle of bundlesForProduct) {
-                    await db.query('UPDATE bundles SET stock = stock - ? WHERE id = ?', [product.quantity, bundle.id]);
+                    const proportionalReduction = Math.min(bundle.stock, product.quantity);
+                    if (proportionalReduction > 0) {
+                        rollbackQueries.push({
+                            query: 'UPDATE bundles SET stock = stock + ? WHERE id = ?',
+                            params: [proportionalReduction, bundle.id],
+                        });
+
+                        await db.query('UPDATE bundles SET stock = stock - ? WHERE id = ?', [proportionalReduction, bundle.id]);
+                    }
                 }
             }
         }
