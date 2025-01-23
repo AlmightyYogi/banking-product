@@ -3,7 +3,7 @@ const db = require('../config/db');
 const router = express.Router();
 
 router.post('/', async (req, res) => {
-    const connection = await db.getConnection();
+    // const connection = await db.getConnection();
     const rollbackQueries = [];
 
     try {
@@ -27,10 +27,23 @@ router.post('/', async (req, res) => {
             });
         }
 
+        // Validasi quantity untuk semua items (product dan bundle)
+        const allItems = [...products, ...bundles];
+        const invalidItems = allItems.filter(item => item.quantity === undefined || item.quantity <= 0);
+
+        if (invalidItems.length > 0) {
+            return res.status(400).json({
+                message: 'Failed to process purchase',
+                status: 400,
+                error: 'Each item (product or bundle) must have a valid quantity greater than 0',
+                invalidItems,
+            });
+        }
+
         let totalCost = 0;
 
         // Transaksi DB
-        await connection.beginTransaction();
+        await db.query('START TRANSACTION');
 
         // Lakukan proses pembelian produk
         if (products.length > 0) {
@@ -121,7 +134,7 @@ router.post('/', async (req, res) => {
         }
 
         // Commit transaksi jika semuanya sukses
-        await connection.commit();
+        await db.query('COMMIT');
 
         res.status(200).json({
             message: 'Purchase successful',
@@ -130,6 +143,7 @@ router.post('/', async (req, res) => {
         });
     } catch (error) {
         // Rollback semua stok jika ada error
+        await db.query('ROLLBACK')
         for (const rollback of rollbackQueries) {
             await db.query(rollback.query, rollback.params);
         }
@@ -139,9 +153,6 @@ router.post('/', async (req, res) => {
             status: 500,
             error: error.message,
         });
-    } finally {
-        // Tutup koneksi DB
-        connection.release();
     }
 });
 
