@@ -25,12 +25,16 @@ exports.createProduct = async (req, res) => {
         }
 
         // Melakukan validasi required kepada semua kolom
-        if (!name || !price || !stock || !description) {
-            return res.status(400).json({ 
-                message: 'Failed to create product',
-                status: 400,
-                error: 'All fields are required'
-             });
+        let fieldsName = ['name', 'price', 'stock', 'description']
+        for (let index = 0; index < fieldsName.length; index++) {
+            const item = req.body[fieldsName[index]];
+            if (!item) {
+                return res.status(400).json({
+                    message: 'Failed to update bundle',
+                    status: 400,
+                    error: `${fieldsName[index]} field are required`,
+                })
+            }
         }
 
         // Menambahkan produk ke dalam db
@@ -88,12 +92,16 @@ exports.updateProduct = async (req, res) => {
         const { name, price, stock, description } = req.body;
 
         // Melakukan validasi required kepada semua kolom
-        if (!name || !price || !stock || !description) {
-            return res.status(400).json({
-                message: 'Failed to update product',
-                status: 400,
-                error: 'All fields are required'
-            });
+        let fieldsName = ['name', 'price', 'stock', 'description']
+        for (let index = 0; index < fieldsName.length; index++) {
+            const item = req.body[fieldsName[index]];
+            if (!item) {
+                return res.status(400).json({
+                    message: 'Failed to update bundle',
+                    status: 400,
+                    error: `${fieldsName[index]} field are required`,
+                })
+            }
         }
 
         // Validasi jika ada product lain denga nama yang sama
