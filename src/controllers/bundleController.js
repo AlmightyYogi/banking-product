@@ -29,12 +29,16 @@ exports.createBundle = async (req, res) => {
         const { name, product_id, price, stock, description } = req.body;
 
         // Validasi input wajib diisi
-        if (!name || !product_id || !price || !stock || !description) {
-            return res.status(400).json({
-                message: 'Failed to create bundle',
-                status: 400,
-                error: 'All fields are required',
-            });
+        let fieldsName = ['name', 'product_id', 'price', 'stock', 'description']
+        for (let index = 0; index < fieldsName.length; index++) {
+            const item = req.body[fieldsName[index]];
+            if (!item) {
+                return res.status(400).json({
+                    message: 'Failed to update bundle',
+                    status: 400,
+                    error: `${fieldsName[index]} field are required`,
+                })
+            }
         }
 
         // Cek apakah produk terkait ada
@@ -117,12 +121,24 @@ exports.updateBundle = async (req, res) => {
         const { name, product_id, price, stock, description } = req.body;
 
         // Validasi request tidak boleh kosong
-        if (!name || !product_id || !price || !stock || !description) {
-            return res.status(400).json({
-                message: 'Failed to update bundle',
-                status: 400,
-                error: 'All fields are required'
-            });
+        // if (!name || !product_id || !price || !stock || !description) {
+        //     return res.status(400).json({
+        //         message: 'Failed to update bundle',
+        //         status: 400,
+        //         error: `${name, product_id, price, stock, description} fields are required`,
+        //     })
+        // }
+
+        let fieldsName = ['name', 'product_id', 'price', 'stock', 'description']
+        for (let index = 0; index < fieldsName.length; index++) {
+            const item = req.body[fieldsName[index]];
+            if (!item) {
+                return res.status(400).json({
+                    message: 'Failed to update bundle',
+                    status: 400,
+                    error: `${fieldsName[index]} field are required`,
+                })
+            }
         }
 
         // Mulai transaction
