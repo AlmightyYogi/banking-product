@@ -103,6 +103,7 @@ router.post('/', async (req, res) => {
                         error: `Bundle with ID ${bundle.id} not found`,
                     });
                 }
+                
                 if (result[0].stock < bundle.quantity) {
                     // Rollback jika stok bundle tidak cukup
                     for (const rollback of rollbackQueries) {
@@ -114,7 +115,20 @@ router.post('/', async (req, res) => {
                         error: `Not enough stock for bundle ID ${bundle.id}`,
                     });
                 }
-                totalCost += result[0].price * bundle.quantity;
+
+                const [productResult] = await db.query('SELECT stock FROM products WHERE id = ?', [result[0].product_id]);
+                if (!productResult.length || productResult[0].stock < bundle.quantity) {
+                    for (const rollback of rollbackQueries) {
+                        await db.query(rollback.query, rollback.params);
+                    }
+                    return res.status(400).json({
+                        message: 'Failed to process purchase',
+                        status: 400,
+                        error: `Not enough stock for product related to bundle ID ${bundle.id}`,
+                    });
+                }
+
+                totalCost += result[0].price * bundle.quantity;``
 
                 // Menambahkan rollback untuk bundle dan produk terkait
                 rollbackQueries.push({
