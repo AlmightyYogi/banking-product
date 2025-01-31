@@ -34,6 +34,17 @@ exports.getBundleById = async (id) => {
     }
 };
 
+// Mengambil data berdasarkan product_id dari table bundles
+exports.getBundleByProductId = async (product_id) => {
+    try {
+        const [rows] = await db.query(`SELECT * FROM bundles WHERE product_id = ?`, [product_id]);
+        console.log("Response:", product_id);
+        return rows;
+    } catch(error) {
+        throw new Error('Failed to fetch bundle by product id');
+    }
+};
+
 // Meng-update data bundle dari table bundles
 exports.updateBundle = async (id, bundle) => {
     try {

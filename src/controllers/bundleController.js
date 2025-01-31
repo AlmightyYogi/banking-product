@@ -114,6 +114,28 @@ exports.getBundleById = async (req, res) => {
     }
 };
 
+exports.getBundleByProductId = async (req, res) => {
+    try {
+        const { product_id } = req.params;
+        console.log("Response Req:", req.params);
+        console.log("Response Product Id:", req);
+        const bundle = await BundleModel.getBundleByProductId(product_id);
+
+        // Jika bundle tidak ditemukan
+        if (!bundle || (Array.isArray(bundle) && bundle.length === 0)) {
+            return res.status(404).json({
+                message: 'Bundle from product not found',
+                status: 404,
+                error: 'Bundle from product not found',
+            });
+        }
+
+        res.status(200).json(bundle);
+    } catch (error) {
+        res.status(500).json({ error:error.message });
+    }
+};
+
 // Menggunakan Transaction
 exports.updateBundle = async (req, res) => {
     try {
